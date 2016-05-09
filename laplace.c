@@ -29,7 +29,9 @@
 #define eps 0.02
 /*To prin the resulted matrix into the file. 0 = don't print. 1 = print*/
 #define printResult 0
-
+/*The size of the auxillary matrix for each process used to calculate the next state*/
+#define moldLength  m + 2
+#define moldHeight  rpp + 2
 
 typedef enum { Up, Down } Dir;
 
@@ -40,7 +42,7 @@ void exchange(double A[][m + 2], int comm[], int rank);
 void setComm(int rank, int comm[]);
 void setOut(double out[], double A[][m + 2], Dir dir, int sender);
 void getIn(double in[], double A[][m + 2], Dir dir, int receiver);
-double iterate(double A[][m + 2], double mold[][m+2], int rank);
+double iterate(double A[][m + 2], int rank);
 void loop(double A[][m + 2], int rank, int comm[], int* numIt);
 
 
@@ -56,26 +58,19 @@ void loop(double A[][m + 2], int rank, int comm[], int* numIt)
 	const int count = (rEnd - rStart) * m;
 
 	/*The final matrix that will store the final results on process 0, excluding the boundaries*/
-	double MM[n*m];
+	/*double MM[n*m]; */
+	/* dynamic allocation avoids segmentation fault because of too large arrays*/
+	double* MM = (double *)malloc(n*m*sizeof(double));
 	/*The array of values that each process will send to process 0*/
-	double send[count];
+	/*double send[count];*/
+	double* send = (double *)malloc(count*sizeof(double));
 
 	for (itCount = 0; itCount < maxit; itCount++)
 	{
 		*numIt = itCount;
-		double B[n + 2][m + 2];
-		int i, j;
-		for (i = 0; i < n + 2; i++)
-		{
-			for (j = 0; j < m + 2; j++)
-			{
-				B[i][j] = A[i][j];
-			}
-		}
-
 		/*Iterate on the subdomain and calculate the distance between submatrices*/
-		double localSum = iterate(A, B, rank);
-		double globalSum;
+		double localSum = iterate(A, rank);
+		double globalSum = 0;
 
 		/*Aggregate the local distances*/
 		MPI_Allreduce(&localSum, &globalSum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -99,8 +94,8 @@ void loop(double A[][m + 2], int rank, int comm[], int* numIt)
 	}
 
 	/*Gather the data from all processes*/
-	MPI_Gather(&send, count, MPI_DOUBLE, &MM, count, MPI_DOUBLE, 0,
-			MPI_COMM_WORLD);
+	MPI_Gather(send, count, MPI_DOUBLE, MM, count, MPI_DOUBLE, 0,
+		MPI_COMM_WORLD);
 	
 	/*Print if allowed*/
 	if (rank == 0 && printResult == 1)
@@ -118,36 +113,29 @@ void loop(double A[][m + 2], int rank, int comm[], int* numIt)
 }
 
 /*The calculation of the next state*/
+/* Declare the auxillary matrix as global variable to avoid redeclaring it in the function*/
+double mold[moldHeight][moldLength];
 
-double iterate(double A[][m + 2], double mold[][m+2], int rank)
+double iterate(double A[][m + 2],  int rank)
 {
-	/*Starting row of the process*/
+	/*Calculates the portion of the next state matrix*/
 	const int rStart = 1 + rank * rpp;
-	/*Last row of the process*/
 	const int rEnd = rStart + rpp;
 	int i, j;
 	double sum = 0;
-	/*int moldLength = m + 2;
-	int moldHeight = (rEnd - rStart) + 2;
-	double mold[moldLength][moldHeight];
 	for (i = 0; i < moldHeight; i++)
 		for (j = 0; j < moldLength; j++)
 			mold[i][j] = A[i + rStart - 1][j];
-	printf("Process %d mold \n", rank);
-	for (i = 0; i < moldHeight; i++)
-		for (j = 0; j < moldLength; j++)
-			printf("%3.2f ", mold[i][j]);
-	printf("\n \n \n \n \n");*/
+	int s = rank * rpp;
 	for (i = rStart; i < rEnd; i++)
 	{
 		for (j = 1; j < m + 1; j++)
 		{
-			/*The next state of the cell is the average of its left, top, right, bottom neighbors*/
-			A[i][j] = 0.25 * (mold[i - 1][j] +
-				mold[i + 1][j] +
-				mold[i][j - 1] +
-				mold[i][j + 1]);
-			sum += (A[i][j] - mold[i][j]) * (A[i][j] - mold[i][j]);
+			A[i][j] = 0.25 * (mold[i - 1 - s][j] +
+				mold[i + 1 - s][j] +
+				mold[i - s][j - 1] +
+				mold[i - s][j + 1]);
+			sum += (A[i][j] - mold[i - s][j]) * (A[i][j] - mold[i - s][j]);
 		}
 	}
 	return sum;
