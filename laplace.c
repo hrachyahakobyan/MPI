@@ -33,6 +33,11 @@
 #define moldLength  m + 2
 #define moldHeight  rpp + 2
 
+/*The main working matrix including the boundaries */
+double A[n+2][m+2];
+/*The auxillary matrix for each process used to calculate the next state*/
+double mold[moldHeight][moldLength];
+
 typedef enum { Up, Down } Dir;
 
 /*Modify the implementation of this method to set the initial values of the matrix, e.g. the boundary values*/
@@ -113,9 +118,6 @@ void loop(double A[][m + 2], int rank, int comm[], int* numIt)
 }
 
 /*The calculation of the next state*/
-/* Declare the auxillary matrix as global variable to avoid redeclaring it in the function*/
-double mold[moldHeight][moldLength];
-
 double iterate(double A[][m + 2],  int rank)
 {
 	/*Calculates the portion of the next state matrix*/
