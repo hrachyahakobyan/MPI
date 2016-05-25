@@ -115,6 +115,8 @@ void loop(double A[][m + 2], int rank, int comm[], int* numIt)
 		}
 
 	}
+	free(send);
+	free(MM);
 }
 
 /*The calculation of the next state*/
@@ -342,10 +344,10 @@ void getIn(double in[], double A[][m + 2], Dir dir, int receiver)
 	}
 }
 
+
 int main(int argc, char* argv[])
 {
 	/*The matrix. The working matrix is  n x m, with 2 boundary rows and columns*/
-	double A[n + 2][m + 2];
 	int comm[2];
 	int error, rank, size;
 	int numIt;
